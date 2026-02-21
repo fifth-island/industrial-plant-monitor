@@ -13,7 +13,12 @@ class Settings(BaseSettings):
     # Application config
     APP_NAME: str = "Plant Monitor Dashboard"
     DEBUG: bool = False
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://industrial-plant-monitor.vercel.app",
+        "https://industrial-plant-monitor-git-master-fifth-islands-projects.vercel.app",
+    ]
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

@@ -4,7 +4,10 @@
   "installCommand": "echo skip",
   "framework": null,
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
+    {
+      "source": "/api/:path*",
+      "destination": "https://industrial-plant-monitor.onrender.com/api/:path*"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
