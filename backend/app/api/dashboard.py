@@ -1,10 +1,12 @@
 """API routes for the dashboard."""
 
+import traceback
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from app.schemas.dashboard import (
     AssetStatusItem,
@@ -80,50 +82,57 @@ async def get_facility_summary(
     Return aggregated KPIs (avg temperature, pressure, total energy, etc.)
     and the status of each asset in the facility.
     """
-    # Check if facility exists
-    facility = await fetch_facility(facility_id)
-    if not facility:
-        raise HTTPException(status_code=404, detail="Facility not found")
+    try:
+        # Check if facility exists
+        facility = await fetch_facility(facility_id)
+        if not facility:
+            raise HTTPException(status_code=404, detail="Facility not found")
 
-    # Fetch assets and KPIs in parallel
-    import asyncio
-    assets_task = fetch_assets_for_facility(facility_id)
-    kpis_task = fetch_kpis(facility_id, hours)
-    assets, kpis = await asyncio.gather(assets_task, kpis_task)
+        # Fetch assets and KPIs in parallel
+        import asyncio
+        assets_task = fetch_assets_for_facility(facility_id)
+        kpis_task = fetch_kpis(facility_id, hours)
+        assets, kpis = await asyncio.gather(assets_task, kpis_task)
 
-    operational = sum(1 for a in assets if a["status"] == "operational")
-    maintenance = sum(1 for a in assets if a["status"] == "maintenance")
+        operational = sum(1 for a in assets if a["status"] == "operational")
+        maintenance = sum(1 for a in assets if a["status"] == "maintenance")
 
-    return FacilitySummaryResponse(
-        facility_id=facility["id"],
-        facility_name=facility["name"],
-        location=facility["location"],
-        facility_type=facility["type"],
-        total_assets=len(assets),
-        operational_count=operational,
-        maintenance_count=maintenance,
-        kpis=[
-            MetricKPI(
-                metric_name=k["metric_name"],
-                current_value=float(k["current_value"]),
-                avg_value=float(k["avg_value"]),
-                min_value=float(k["min_value"]),
-                max_value=float(k["max_value"]),
-                unit=k["unit"],
-            )
-            for k in kpis
-        ],
-        assets=[
-            AssetStatusItem(
-                id=a["id"],
-                name=a["name"],
-                type=a["type"],
-                status=a["status"],
-            )
-            for a in assets
-        ],
-        period_hours=hours,
-    )
+        return FacilitySummaryResponse(
+            facility_id=facility["id"],
+            facility_name=facility["name"],
+            location=facility["location"],
+            facility_type=facility["type"],
+            total_assets=len(assets),
+            operational_count=operational,
+            maintenance_count=maintenance,
+            kpis=[
+                MetricKPI(
+                    metric_name=k["metric_name"],
+                    current_value=float(k["current_value"]),
+                    avg_value=float(k["avg_value"]),
+                    min_value=float(k["min_value"]),
+                    max_value=float(k["max_value"]),
+                    unit=k["unit"],
+                )
+                for k in kpis
+            ],
+            assets=[
+                AssetStatusItem(
+                    id=a["id"],
+                    name=a["name"],
+                    type=a["type"],
+                    status=a["status"],
+                )
+                for a in assets
+            ],
+            period_hours=hours,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[ERROR] summary failed: {exc}\n{tb}")
+        return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
 
 
 # ── GET /dashboard/timeseries/{facility_id} ────────
@@ -150,41 +159,48 @@ async def get_facility_timeseries(
     Data is downsampled into N-minute buckets (average) for
     chart performance in Recharts.
     """
-    facility = await fetch_facility(facility_id)
-    if not facility:
-        raise HTTPException(status_code=404, detail="Facility not found")
+    try:
+        facility = await fetch_facility(facility_id)
+        if not facility:
+            raise HTTPException(status_code=404, detail="Facility not found")
 
-    # Determine unit from metric
-    unit_map = {
-        "temperature": "C",
-        "pressure": "bar",
-        "power_consumption": "kW",
-        "production_output": "units/hr",
-    }
+        # Determine unit from metric
+        unit_map = {
+            "temperature": "C",
+            "pressure": "bar",
+            "power_consumption": "kW",
+            "production_output": "units/hr",
+        }
 
-    series_data = await fetch_timeseries(
-        facility_id, metric.value, hours, bucket_minutes
-    )
+        series_data = await fetch_timeseries(
+            facility_id, metric.value, hours, bucket_minutes
+        )
 
-    now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
 
-    return TimeseriesResponse(
-        facility_id=facility["id"],
-        facility_name=facility["name"],
-        metric_name=metric.value,
-        unit=unit_map.get(metric.value, ""),
-        start=now - timedelta(hours=hours),
-        end=now,
-        bucket_minutes=bucket_minutes,
-        series=[
-            AssetTimeseries(
-                asset_id=s["asset_id"],
-                asset_name=s["asset_name"],
-                data=[
-                    TimeseriesPoint(timestamp=p["timestamp"], value=p["value"])
-                    for p in s["data"]
-                ],
-            )
-            for s in series_data
-        ],
-    )
+        return TimeseriesResponse(
+            facility_id=facility["id"],
+            facility_name=facility["name"],
+            metric_name=metric.value,
+            unit=unit_map.get(metric.value, ""),
+            start=now - timedelta(hours=hours),
+            end=now,
+            bucket_minutes=bucket_minutes,
+            series=[
+                AssetTimeseries(
+                    asset_id=s["asset_id"],
+                    asset_name=s["asset_name"],
+                    data=[
+                        TimeseriesPoint(timestamp=p["timestamp"], value=p["value"])
+                        for p in s["data"]
+                    ],
+                )
+                for s in series_data
+            ],
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[ERROR] timeseries failed: {exc}\n{tb}")
+        return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
