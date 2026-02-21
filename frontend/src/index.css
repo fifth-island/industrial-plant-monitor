@@ -1,4 +1,30 @@
-/* Minimal reset — Ant Design manages theming */
+/* ── CVector Design System ── */
+:root {
+  /* Primitives */
+  --cv-flamingo: #f55330;
+  --cv-siren: #800139;
+  --cv-sunglow: #ffbc39;
+  --cv-clay: #e8e1d7;
+  --cv-neutral-darkest: #0c0402;
+  --cv-neutral-light: #b6b3b3;
+  --cv-neutral-lighter: #dad9d9;
+  --cv-white: #fff;
+
+  /* Semantic */
+  --cv-bg-page: #faf8f5;
+  --cv-bg-card: var(--cv-white);
+  --cv-text-primary: var(--cv-neutral-darkest);
+  --cv-text-secondary: var(--cv-neutral-light);
+  --cv-border: var(--cv-neutral-lighter);
+  --cv-accent: var(--cv-flamingo);
+  --cv-accent-dark: var(--cv-siren);
+  --cv-accent-warm: var(--cv-sunglow);
+
+  /* Typography */
+  --cv-font-heading: 'Bai Jamjuree', Arial, sans-serif;
+  --cv-font-body: 'Manrope', Arial, sans-serif;
+}
+
 *,
 *::before,
 *::after {
@@ -8,6 +34,74 @@
 body {
   margin: 0;
   padding: 0;
+  font-family: var(--cv-font-body);
+  color: var(--cv-text-primary);
+  background: var(--cv-bg-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--cv-font-heading);
+  font-weight: 400;
+}
+
+/* Ant Design overrides for CVector palette */
+.ant-card {
+  border-radius: 12px !important;
+  border: 1px solid var(--cv-border) !important;
+  box-shadow: 0 1px 3px rgba(12, 4, 2, 0.04) !important;
+  transition: box-shadow 0.2s ease, transform 0.2s ease !important;
+}
+.ant-card:hover {
+  box-shadow: 0 4px 16px rgba(12, 4, 2, 0.08) !important;
+}
+.ant-card .ant-card-head {
+  font-family: var(--cv-font-heading) !important;
+  border-bottom: 1px solid var(--cv-clay) !important;
+}
+
+.ant-tag-success {
+  background: #f0fdf4 !important;
+  border-color: #86efac !important;
+  color: #166534 !important;
+}
+.ant-tag-warning {
+  background: #fffbeb !important;
+  border-color: var(--cv-sunglow) !important;
+  color: #92400e !important;
+}
+
+.ant-table-thead > tr > th {
+  font-family: var(--cv-font-heading) !important;
+  font-weight: 500 !important;
+  background: var(--cv-bg-page) !important;
+  font-size: 13px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.ant-select-selector {
+  border-radius: 8px !important;
+}
+
+.ant-segmented {
+  border-radius: 8px !important;
+}
+.ant-segmented-item-selected {
+  background: var(--cv-siren) !important;
+  color: var(--cv-white) !important;
+  border-radius: 6px !important;
+}
+
+.ant-statistic-title {
+  font-family: var(--cv-font-heading) !important;
+  font-size: 13px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+  color: var(--cv-neutral-light) !important;
+}
+.ant-statistic-content-value {
+  font-family: var(--cv-font-body) !important;
+  font-weight: 600 !important;
 }

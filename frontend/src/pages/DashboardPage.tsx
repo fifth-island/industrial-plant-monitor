@@ -1,4 +1,4 @@
-import { Typography, Divider } from 'antd';
+import { Typography } from 'antd';
 import { useFacility } from '../context/FacilityContext';
 import KpiCards from '../components/KpiCards';
 import TimeseriesChart from '../components/TimeseriesChart';
@@ -12,12 +12,27 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 16 }}>
-        <Title level={3} style={{ margin: 0 }}>
+      {/* Facility header */}
+      <div style={{ marginBottom: 24 }}>
+        <Title
+          level={3}
+          style={{
+            margin: 0,
+            fontFamily: "'Bai Jamjuree', Arial, sans-serif",
+            fontWeight: 400,
+            color: '#0c0402',
+          }}
+        >
           {selected?.name ?? 'Dashboard'}
         </Title>
         {selected && (
-          <Text type="secondary">
+          <Text
+            style={{
+              color: '#b6b3b3',
+              fontSize: 14,
+              textTransform: 'capitalize',
+            }}
+          >
             {selected.location} &middot; {selected.type.replace('_', ' ')}
           </Text>
         )}
@@ -25,9 +40,9 @@ export default function DashboardPage() {
 
       <KpiCards />
 
-      <Divider />
-
-      <TimeseriesChart />
+      <div style={{ marginTop: 28 }}>
+        <TimeseriesChart />
+      </div>
     </div>
   );
 }

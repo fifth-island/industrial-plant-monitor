@@ -20,16 +20,16 @@ import type {
 } from '../../types';
 import { METRIC_LABELS, METRIC_UNITS } from '../../types';
 
-// Colors to differentiate assets in the same chart
+// CVector-inspired palette for multi-asset lines
 const ASSET_COLORS = [
-  '#1890ff',
-  '#ff4d4f',
-  '#52c41a',
-  '#faad14',
-  '#722ed1',
-  '#13c2c2',
-  '#eb2f96',
-  '#fa8c16',
+  '#f55330',  // Flamingo
+  '#800139',  // Siren
+  '#ffbc39',  // Sunglow
+  '#3f8600',  // green
+  '#0c0402',  // Neutral darkest
+  '#b6b3b3',  // Neutral light
+  '#d9442a',  // Flamingo dark
+  '#a3014d',  // Siren light
 ];
 
 /** Flatten TimeseriesResponse into a flat array for Recharts. */

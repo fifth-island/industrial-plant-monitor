@@ -89,8 +89,8 @@ export const METRIC_UNITS: Record<MetricName, string> = {
 };
 
 export const METRIC_COLORS: Record<MetricName, string> = {
-  temperature: '#ff4d4f',
-  pressure: '#1890ff',
-  power_consumption: '#faad14',
-  production_output: '#52c41a',
+  temperature: '#f55330',     // Flamingo
+  pressure: '#800139',        // Siren
+  power_consumption: '#ffbc39', // Sunglow
+  production_output: '#3f8600',
 };

@@ -50,7 +50,7 @@ const METRIC_SUFFIX: Record<MetricName, string> = {
   production_output: 'units/hr',
 };
 
-// Danger thresholds — values above these turn red
+// CVector-palette thresholds
 const METRIC_THRESHOLDS: Record<MetricName, { warn: number; danger: number }> = {
   temperature:      { warn: 90,  danger: 110 },
   pressure:         { warn: 7,   danger: 9 },
@@ -58,19 +58,19 @@ const METRIC_THRESHOLDS: Record<MetricName, { warn: number; danger: number }> = 
   production_output:{ warn: 180, danger: 195 },
 };
 
-/** Return a color based on how close the value is to danger. */
+/** Return a CVector-palette color based on how close the value is to danger. */
 function getStatusColor(metric: MetricName, value: number): string {
   const t = METRIC_THRESHOLDS[metric];
-  if (value >= t.danger) return '#cf1322';   // red
-  if (value >= t.warn)   return '#fa8c16';   // orange
+  if (value >= t.danger) return '#f55330';   // Flamingo
+  if (value >= t.warn)   return '#ffbc39';   // Sunglow
   return '#3f8600';                          // green
 }
 
 /** Return an appropriate icon when a metric is in danger zone. */
 function getStatusIcon(metric: MetricName, value: number): React.ReactNode {
   const t = METRIC_THRESHOLDS[metric];
-  if (value >= t.danger) return <WarningOutlined style={{ color: '#cf1322' }} />;
-  if (value >= t.warn)   return <WarningOutlined style={{ color: '#fa8c16' }} />;
+  if (value >= t.danger) return <WarningOutlined style={{ color: '#f55330' }} />;
+  if (value >= t.warn)   return <WarningOutlined style={{ color: '#ffbc39' }} />;
   return METRIC_ICONS[metric];
 }
 
@@ -204,7 +204,7 @@ export default function KpiCards() {
                 <Statistic
                   title="Maintenance"
                   value={summary.maintenance_count}
-                  valueStyle={{ color: '#faad14' }}
+                  valueStyle={{ color: '#ffbc39' }}
                 />
               </Col>
             </Row>
