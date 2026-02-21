@@ -102,11 +102,26 @@ export default function KpiCards() {
 
   useEffect(() => {
     if (!selectedId) return;
-    setLoading(true);
-    fetchSummary(selectedId, hours)
-      .then(setSummary)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout>;
+
+    async function load() {
+      if (cancelled) return;
+      setLoading(true);
+      try {
+        const res = await fetchSummary(selectedId!, hours);
+        if (!cancelled) setSummary(res);
+      } catch (err) {
+        console.error(err);
+        // Auto-retry after 4s (cold-start resilience)
+        retryTimer = setTimeout(load, 4_000);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; clearTimeout(retryTimer); };
   }, [selectedId, hours]);
 
   if (!selectedId) return <Empty description="Select a facility" />;

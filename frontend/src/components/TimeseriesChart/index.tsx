@@ -64,11 +64,25 @@ export default function TimeseriesChart() {
 
   useEffect(() => {
     if (!selectedId) return;
-    setLoading(true);
-    fetchTimeseries(selectedId, metric, hours, bucket)
-      .then(setData)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout>;
+
+    async function load() {
+      if (cancelled) return;
+      setLoading(true);
+      try {
+        const res = await fetchTimeseries(selectedId!, metric, hours, bucket);
+        if (!cancelled) setData(res);
+      } catch (err) {
+        console.error(err);
+        retryTimer = setTimeout(load, 4_000);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; clearTimeout(retryTimer); };
   }, [selectedId, metric, hours, bucket]);
 
   if (!selectedId) return <Empty description="Select a facility" />;

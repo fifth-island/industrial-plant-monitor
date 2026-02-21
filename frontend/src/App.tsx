@@ -1,6 +1,7 @@
 import { ConfigProvider, theme as antTheme } from 'antd';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { FacilityProvider } from './context/FacilityContext';
+import WakeUpGuard from './components/WakeUpGuard';
 import AppLayout from './layout/AppLayout';
 import DashboardPage from './pages/DashboardPage';
 
@@ -66,11 +67,13 @@ function ThemedApp() {
         },
       }}
     >
-      <FacilityProvider>
-        <AppLayout>
-          <DashboardPage />
-        </AppLayout>
-      </FacilityProvider>
+      <WakeUpGuard>
+        <FacilityProvider>
+          <AppLayout>
+            <DashboardPage />
+          </AppLayout>
+        </FacilityProvider>
+      </WakeUpGuard>
     </ConfigProvider>
   );
 }
