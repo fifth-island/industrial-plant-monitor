@@ -8,8 +8,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'https://industrial-plant-monitor.onrender.com',
         changeOrigin: true,
+        secure: true,
       },
     },
   },

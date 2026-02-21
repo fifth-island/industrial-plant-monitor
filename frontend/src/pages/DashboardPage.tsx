@@ -20,7 +20,7 @@ export default function DashboardPage() {
             margin: 0,
             fontFamily: "'Bai Jamjuree', Arial, sans-serif",
             fontWeight: 400,
-            color: '#0c0402',
+            color: 'var(--cv-text-primary)',
           }}
         >
           {selected?.name ?? 'Dashboard'}
@@ -28,7 +28,7 @@ export default function DashboardPage() {
         {selected && (
           <Text
             style={{
-              color: '#b6b3b3',
+              color: 'var(--cv-text-secondary)',
               fontSize: 14,
               textTransform: 'capitalize',
             }}

@@ -172,7 +172,7 @@ export default function KpiCards() {
                   style={{
                     marginTop: 8,
                     fontSize: 12,
-                    color: 'rgba(0,0,0,0.45)',
+                    color: 'var(--cv-text-tertiary)',
                   }}
                 >
                   Current:{' '}

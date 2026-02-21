@@ -19,6 +19,7 @@ import type {
   TimeseriesResponse,
 } from '../../types';
 import { METRIC_LABELS, METRIC_UNITS } from '../../types';
+import { useTheme } from '../../context/ThemeContext';
 
 // CVector-inspired palette for multi-asset lines
 const ASSET_COLORS = [
@@ -54,6 +55,7 @@ function flattenSeries(ts: TimeseriesResponse) {
 
 export default function TimeseriesChart() {
   const { selectedId } = useFacility();
+  const { isDark } = useTheme();
   const [metric, setMetric] = useState<MetricName>('temperature');
   const [hours, setHours] = useState<number>(24);
   const [bucket, setBucket] = useState<number>(5);
@@ -123,22 +125,37 @@ export default function TimeseriesChart() {
       ) : (
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke={isDark ? '#33303c' : '#e8e1d7'}
+            />
             <XAxis
               dataKey="timestamp"
               tickFormatter={(v: string) => dayjs(v).format('HH:mm')}
               interval="preserveStartEnd"
               fontSize={12}
+              stroke={isDark ? '#8b8594' : '#b6b3b3'}
+              tick={{ fill: isDark ? '#8b8594' : '#0c0402' }}
             />
             <YAxis
               unit={` ${data?.unit ?? ''}`}
               fontSize={12}
               domain={['auto', 'auto']}
+              stroke={isDark ? '#8b8594' : '#b6b3b3'}
+              tick={{ fill: isDark ? '#8b8594' : '#0c0402' }}
             />
             <Tooltip
               labelFormatter={(v) =>
                 dayjs(String(v)).format('DD/MM HH:mm')
               }
+              contentStyle={{
+                background: isDark ? '#262330' : '#fff',
+                border: `1px solid ${isDark ? '#33303c' : '#dad9d9'}`,
+                borderRadius: 8,
+                color: isDark ? '#eae6f0' : '#0c0402',
+              }}
+              labelStyle={{ color: isDark ? '#eae6f0' : '#0c0402' }}
+              itemStyle={{ color: isDark ? '#eae6f0' : '#0c0402' }}
             />
             <Legend />
             {assetNames.map((name, i) => (
