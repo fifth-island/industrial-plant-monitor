@@ -43,6 +43,9 @@ async def get_pool() -> asyncpg.Pool:
             _get_raw_pg_url(),
             min_size=2,
             max_size=5,  # Stay within Supabase free-tier connection limits
+            # Supabase uses PgBouncer in transaction mode, which does not
+            # support prepared statements. Disable the statement cache.
+            statement_cache_size=0,
         )
     return _pool
 
