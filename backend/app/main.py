@@ -3,11 +3,13 @@
 import asyncio
 import logging
 import math
+import os
 import random
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -69,21 +71,50 @@ async def _generate_live_readings():
         await asyncio.sleep(INTERVAL_SECONDS)
 
 
+# ── Background task: self-ping to prevent Render free-tier from sleeping ──
+
+SELF_PING_INTERVAL = 780  # 13 minutes (Render sleeps after 15 min inactivity)
+_self_ping_task: asyncio.Task | None = None
+
+
+async def _self_ping():
+    """Ping our own /health endpoint to keep the Render instance awake."""
+    # Detect the public URL from the RENDER_EXTERNAL_URL env var that Render sets,
+    # or fall back to localhost for local development.
+    base_url = os.environ.get("RENDER_EXTERNAL_URL", "http://localhost:8000")
+    url = f"{base_url}/health"
+    logger.info("Self-ping target: %s (every %ds)", url, SELF_PING_INTERVAL)
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        while True:
+            await asyncio.sleep(SELF_PING_INTERVAL)
+            try:
+                r = await client.get(url)
+                logger.info("Self-ping: %s → %d", url, r.status_code)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("Self-ping failed: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle."""
-    global _bg_task
-    # Startup: launch the background task
+    global _bg_task, _self_ping_task
+    # Startup: launch background tasks
     _bg_task = asyncio.create_task(_generate_live_readings())
+    _self_ping_task = asyncio.create_task(_self_ping())
     logger.info("Background live-reading task started (every %ds)", INTERVAL_SECONDS)
+    logger.info("Self-ping keep-alive task started (every %ds)", SELF_PING_INTERVAL)
     yield
-    # Shutdown: cancel the task and close the pool
-    if _bg_task:
-        _bg_task.cancel()
-        try:
-            await _bg_task
-        except asyncio.CancelledError:
-            pass
+    # Shutdown: cancel tasks and close the pool
+    for task in (_bg_task, _self_ping_task):
+        if task:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
     await close_pool()
 
 

@@ -1,12 +1,13 @@
 """API routes for the dashboard."""
 
-import traceback
+import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import JSONResponse
+
+logger = logging.getLogger(__name__)
 
 from app.schemas.dashboard import (
     AssetStatusItem,
@@ -129,10 +130,9 @@ async def get_facility_summary(
         )
     except HTTPException:
         raise
-    except Exception as exc:
-        tb = traceback.format_exc()
-        print(f"[ERROR] summary failed: {exc}\n{tb}")
-        return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
+    except Exception:
+        logger.exception("Summary endpoint failed for facility %s", facility_id)
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # ── GET /dashboard/timeseries/{facility_id} ────────
@@ -200,7 +200,6 @@ async def get_facility_timeseries(
         )
     except HTTPException:
         raise
-    except Exception as exc:
-        tb = traceback.format_exc()
-        print(f"[ERROR] timeseries failed: {exc}\n{tb}")
-        return JSONResponse(status_code=500, content={"detail": str(exc), "traceback": tb})
+    except Exception:
+        logger.exception("Timeseries endpoint failed for facility %s", facility_id)
+        raise HTTPException(status_code=500, detail="Internal server error")
