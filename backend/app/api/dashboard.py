@@ -1,11 +1,14 @@
 """API routes for the dashboard."""
 
+import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +18,7 @@ from app.schemas.dashboard import (
     FacilitiesListResponse,
     FacilityItem,
     FacilitySummaryResponse,
+    InsightItem,
     MetricKPI,
     TimeseriesPoint,
     TimeseriesResponse,
@@ -23,6 +27,7 @@ from app.services.dashboard import (
     fetch_assets_for_facility,
     fetch_facility,
     fetch_facilities_with_counts,
+    fetch_insights,
     fetch_kpis,
     fetch_timeseries,
 )
@@ -89,14 +94,18 @@ async def get_facility_summary(
         if not facility:
             raise HTTPException(status_code=404, detail="Facility not found")
 
-        # Fetch assets and KPIs in parallel
+        # Fetch assets, KPIs, and insights in parallel
         import asyncio
         assets_task = fetch_assets_for_facility(facility_id)
         kpis_task = fetch_kpis(facility_id, hours)
-        assets, kpis = await asyncio.gather(assets_task, kpis_task)
+        insights_task = fetch_insights(facility_id)
+        assets, kpis, insights = await asyncio.gather(assets_task, kpis_task, insights_task)
 
         operational = sum(1 for a in assets if a["status"] == "operational")
         maintenance = sum(1 for a in assets if a["status"] == "maintenance")
+        
+        # Count active alerts (high and medium severity)
+        active_alerts = sum(1 for i in insights if i["severity"] in ("high", "medium"))
 
         return FacilitySummaryResponse(
             facility_id=facility["id"],
@@ -106,6 +115,7 @@ async def get_facility_summary(
             total_assets=len(assets),
             operational_count=operational,
             maintenance_count=maintenance,
+            active_alerts_count=active_alerts,
             kpis=[
                 MetricKPI(
                     metric_name=k["metric_name"],
@@ -117,12 +127,33 @@ async def get_facility_summary(
                 )
                 for k in kpis
             ],
+            insights=[
+                InsightItem(
+                    severity=i["severity"],
+                    title=i["title"],
+                    description=i["description"],
+                    detected_at=i["detected_at"],
+                )
+                for i in insights
+            ],
             assets=[
                 AssetStatusItem(
                     id=a["id"],
                     name=a["name"],
                     type=a["type"],
                     status=a["status"],
+                    temperature=float(a["temperature"]) if a["temperature"] is not None else None,
+                    temperature_unit=a["temperature_unit"],
+                    temperature_range=a["temperature_range"],
+                    pressure=float(a["pressure"]) if a["pressure"] is not None else None,
+                    pressure_unit=a["pressure_unit"],
+                    pressure_range=a["pressure_range"],
+                    power=float(a["power"]) if a["power"] is not None else None,
+                    power_unit=a["power_unit"],
+                    power_range=a["power_range"],
+                    production=float(a["production"]) if a["production"] is not None else None,
+                    production_unit=a["production_unit"],
+                    production_range=a["production_range"],
                 )
                 for a in assets
             ],
@@ -203,3 +234,132 @@ async def get_facility_timeseries(
     except Exception:
         logger.exception("Timeseries endpoint failed for facility %s", facility_id)
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ── GET /dashboard/stream/{facility_id} ────────────
+
+
+@router.get(
+    "/stream/{facility_id}",
+    summary="Server-Sent Events stream for live dashboard updates",
+)
+async def stream_facility_summary(
+    request: Request,
+    facility_id: UUID,
+    hours: int = Query(default=24, ge=1, le=48, description="Time window in hours"),
+):
+    """
+    Stream live dashboard updates using Server-Sent Events (SSE).
+    Sends summary data immediately when new sensor readings are inserted.
+    Sends keep-alive pings every 15 seconds if no data updates.
+    """
+    from app.events import broadcaster
+    
+    async def event_generator():
+        """Generate SSE events when facility data updates."""
+        try:
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    logger.info("Client disconnected from SSE stream for facility %s", facility_id)
+                    break
+                
+                # Wait for facility update event (15 second timeout for keep-alive)
+                update_received = await broadcaster.wait_for_update(facility_id, timeout=15.0)
+                
+                if update_received:
+                    # Fetch fresh summary data (reuse existing service functions)
+                    try:
+                        facility = await fetch_facility(facility_id)
+                        if not facility:
+                            yield f"event: error\ndata: {json.dumps({'error': 'Facility not found'})}\n\n"
+                            break
+                        
+                        assets_task = fetch_assets_for_facility(facility_id)
+                        kpis_task = fetch_kpis(facility_id, hours)
+                        insights_task = fetch_insights(facility_id)
+                        assets, kpis, insights = await asyncio.gather(assets_task, kpis_task, insights_task)
+                        
+                        operational = sum(1 for a in assets if a["status"] == "operational")
+                        maintenance = sum(1 for a in assets if a["status"] == "maintenance")
+                        
+                        # Count active alerts (high and medium severity)
+                        active_alerts = sum(1 for i in insights if i["severity"] in ("high", "medium"))
+                        
+                        summary_data = {
+                            "facility_id": str(facility["id"]),
+                            "facility_name": facility["name"],
+                            "location": facility["location"],
+                            "facility_type": facility["type"],
+                            "total_assets": len(assets),
+                            "operational_count": operational,
+                            "maintenance_count": maintenance,
+                            "active_alerts_count": active_alerts,
+                            "kpis": [
+                                {
+                                    "metric_name": k["metric_name"],
+                                    "current_value": float(k["current_value"]),
+                                    "avg_value": float(k["avg_value"]),
+                                    "min_value": float(k["min_value"]),
+                                    "max_value": float(k["max_value"]),
+                                    "unit": k["unit"],
+                                }
+                                for k in kpis
+                            ],
+                            "insights": [
+                                {
+                                    "severity": i["severity"],
+                                    "title": i["title"],
+                                    "description": i["description"],
+                                    "detected_at": i["detected_at"].isoformat(),
+                                }
+                                for i in insights
+                            ],
+                            "assets": [
+                                {
+                                    "id": str(a["id"]),
+                                    "name": a["name"],
+                                    "type": a["type"],
+                                    "status": a["status"],
+                                    "temperature": float(a["temperature"]) if a["temperature"] is not None else None,
+                                    "temperature_unit": a["temperature_unit"],
+                                    "temperature_range": a["temperature_range"],
+                                    "pressure": float(a["pressure"]) if a["pressure"] is not None else None,
+                                    "pressure_unit": a["pressure_unit"],
+                                    "pressure_range": a["pressure_range"],
+                                    "power": float(a["power"]) if a["power"] is not None else None,
+                                    "power_unit": a["power_unit"],
+                                    "power_range": a["power_range"],
+                                    "production": float(a["production"]) if a["production"] is not None else None,
+                                    "production_unit": a["production_unit"],
+                                    "production_range": a["production_range"],
+                                }
+                                for a in assets
+                            ],
+                            "period_hours": hours,
+                        }
+                        
+                        # Send SSE event
+                        yield f"event: summary\ndata: {json.dumps(summary_data)}\n\n"
+                        logger.debug("Sent SSE update for facility %s", facility_id)
+                        
+                    except Exception as e:
+                        logger.exception("Error fetching summary for SSE stream")
+                        yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+                else:
+                    # Timeout - send keep-alive ping
+                    yield ": ping\n\n"
+                    
+        except asyncio.CancelledError:
+            logger.info("SSE stream cancelled for facility %s", facility_id)
+        except Exception:
+            logger.exception("SSE stream error for facility %s", facility_id)
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )

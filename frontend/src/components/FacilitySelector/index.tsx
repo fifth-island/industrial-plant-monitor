@@ -7,7 +7,7 @@ const { Text } = Typography;
 /**
  * Facility selector shown in the header.
  * Uses className for header-specific styling (translucent bg on dark header)
- * and popupClassName so the dropdown renders with card-like bg.
+ * and classNames.popup so the dropdown renders with card-like bg.
  */
 export default function FacilitySelector() {
   const { facilities, loading, selectedId, setSelectedId } = useFacility();
@@ -17,7 +17,7 @@ export default function FacilitySelector() {
       <EnvironmentOutlined style={{ fontSize: 16, color: '#ffbc39', flexShrink: 0 }} />
       <Select
         className="header-facility-select"
-        popupClassName="header-facility-dropdown"
+        classNames={{ popup: 'header-facility-dropdown' }}
         value={selectedId ?? undefined}
         onChange={setSelectedId}
         loading={loading}

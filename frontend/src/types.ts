@@ -29,6 +29,30 @@ export interface AssetStatus {
   name: string;
   type: string;
   status: 'operational' | 'maintenance';
+  // Temperature
+  temperature?: number | null;
+  temperature_unit?: string | null;
+  temperature_range?: { min: number; max: number };
+  // Pressure
+  pressure?: number | null;
+  pressure_unit?: string | null;
+  pressure_range?: { min: number; max: number };
+  // Power
+  power?: number | null;
+  power_unit?: string | null;
+  power_range?: { min: number; max: number };
+  // Production
+  production?: number | null;
+  production_unit?: string | null;
+  production_range?: { min: number; max: number };
+}
+
+export interface InsightItem {
+  severity: 'ok' | 'low' | 'medium' | 'high';
+  title: string;
+  description: string;
+  detected_at: string;
+  asset_name?: string;
 }
 
 export interface FacilitySummaryResponse {
@@ -39,7 +63,9 @@ export interface FacilitySummaryResponse {
   total_assets: number;
   operational_count: number;
   maintenance_count: number;
+  active_alerts_count: number;
   kpis: MetricKPI[];
+  insights: InsightItem[];
   assets: AssetStatus[];
   period_hours: number;
 }

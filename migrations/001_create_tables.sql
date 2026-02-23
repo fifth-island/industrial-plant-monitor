@@ -1,11 +1,11 @@
 -- 001_create_tables.sql
 -- Creates the core schema: facilities, assets, sensor_readings
 
--- Enable UUID extension (Supabase enables this by default)
+-- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Facilities
-CREATE TABLE facilities (
+CREATE TABLE IF NOT EXISTS facilities (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name        VARCHAR(255) NOT NULL,
     location    VARCHAR(255) NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE facilities (
 );
 
 -- Assets
-CREATE TABLE assets (
+CREATE TABLE IF NOT EXISTS assets (
     id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     facility_id  UUID NOT NULL REFERENCES facilities(id) ON DELETE CASCADE,
     name         VARCHAR(255) NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE assets (
 );
 
 -- Sensor Readings
-CREATE TABLE sensor_readings (
+CREATE TABLE IF NOT EXISTS sensor_readings (
     id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     asset_id     UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
     metric_name  VARCHAR(100)     NOT NULL,
@@ -37,6 +37,6 @@ CREATE TABLE sensor_readings (
 );
 
 -- Indexes for query performance
-CREATE INDEX ix_readings_asset_metric_ts ON sensor_readings (asset_id, metric_name, timestamp DESC);
-CREATE INDEX ix_readings_timestamp        ON sensor_readings (timestamp DESC);
-CREATE INDEX ix_assets_facility           ON assets (facility_id);
+CREATE INDEX IF NOT EXISTS ix_readings_asset_metric_ts ON sensor_readings (asset_id, metric_name, timestamp DESC);
+CREATE INDEX IF NOT EXISTS ix_readings_timestamp        ON sensor_readings (timestamp DESC);
+CREATE INDEX IF NOT EXISTS ix_assets_facility           ON assets (facility_id);

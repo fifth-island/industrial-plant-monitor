@@ -29,3 +29,8 @@ supabase/.temp/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Internal / personal files (not for the repo)
+CVector - Take Home Test Instructions.pdf
+REQUIREMENTS_CHECKLIST.md
+Specifications for project

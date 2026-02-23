@@ -81,3 +81,35 @@ export async function fetchTimeseries(
   );
   return data;
 }
+
+/** Stream live summary updates using Server-Sent Events. */
+export function streamSummary(
+  facilityId: string,
+  hours: number = 24,
+  onData: (summary: FacilitySummaryResponse) => void,
+  onError?: (error: Event) => void,
+): EventSource {
+  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+  const url = `${baseURL}/dashboard/stream/${facilityId}?hours=${hours}`;
+  
+  const eventSource = new EventSource(url);
+  
+  eventSource.addEventListener('summary', (event: MessageEvent) => {
+    try {
+      const summary = JSON.parse(event.data) as FacilitySummaryResponse;
+      onData(summary);
+    } catch (err) {
+      console.error('[SSE] Failed to parse summary data:', err);
+    }
+  });
+  
+  eventSource.addEventListener('error', (event: Event) => {
+    console.error('[SSE] Connection error:', event);
+    if (onError) {
+      onError(event);
+    }
+  });
+  
+  return eventSource;
+}
+

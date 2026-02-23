@@ -10,11 +10,27 @@ from pydantic import BaseModel, Field
 
 
 class AssetStatusItem(BaseModel):
-    """Status de um asset individual."""
+    """Status and metrics for an individual asset."""
     id: UUID
     name: str
     type: str
     status: str = Field(description="operational | maintenance")
+    # Temperature
+    temperature: float | None = None
+    temperature_unit: str | None = None
+    temperature_range: dict | None = None
+    # Pressure
+    pressure: float | None = None
+    pressure_unit: str | None = None
+    pressure_range: dict | None = None
+    # Power
+    power: float | None = None
+    power_unit: str | None = None
+    power_range: dict | None = None
+    # Production
+    production: float | None = None
+    production_unit: str | None = None
+    production_range: dict | None = None
 
 
 class MetricKPI(BaseModel):
@@ -25,6 +41,15 @@ class MetricKPI(BaseModel):
     min_value: float
     max_value: float
     unit: str
+
+
+class InsightItem(BaseModel):
+    """Operational insight based on sensor data analysis."""
+    severity: str = Field(description="ok | low | medium | high")
+    title: str
+    description: str
+    detected_at: datetime = Field(description="Timestamp when insight was detected")
+    asset_name: str | None = None
 
 
 # ── Response: Summary ───────────────────────────────
@@ -39,7 +64,9 @@ class FacilitySummaryResponse(BaseModel):
     total_assets: int
     operational_count: int
     maintenance_count: int
+    active_alerts_count: int = Field(description="Number of high/medium severity alerts")
     kpis: list[MetricKPI]
+    insights: list[InsightItem]
     assets: list[AssetStatusItem]
     period_hours: int = Field(description="KPI time window in hours")
 

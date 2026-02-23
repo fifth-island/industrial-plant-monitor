@@ -53,7 +53,11 @@ function flattenSeries(ts: TimeseriesResponse) {
   );
 }
 
-export default function TimeseriesChart() {
+interface TimeseriesChartProps {
+  onDataLoaded?: () => void;
+}
+
+export default function TimeseriesChart({ onDataLoaded }: TimeseriesChartProps) {
   const { selectedId } = useFacility();
   const { isDark } = useTheme();
   const [metric, setMetric] = useState<MetricName>('temperature');
@@ -66,13 +70,17 @@ export default function TimeseriesChart() {
     if (!selectedId) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout>;
+    let refreshTimer: ReturnType<typeof setInterval>;
 
     async function load() {
       if (cancelled) return;
       setLoading(true);
       try {
         const res = await fetchTimeseries(selectedId!, metric, hours, bucket);
-        if (!cancelled) setData(res);
+        if (!cancelled) {
+          setData(res);
+          onDataLoaded?.();
+        }
       } catch (err) {
         console.error(err);
         retryTimer = setTimeout(load, 4_000);
@@ -82,8 +90,17 @@ export default function TimeseriesChart() {
     }
 
     load();
-    return () => { cancelled = true; clearTimeout(retryTimer); };
-  }, [selectedId, metric, hours, bucket]);
+    // Auto-refresh every 30 seconds
+    refreshTimer = setInterval(() => {
+      if (!cancelled) load();
+    }, 30_000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(retryTimer);
+      clearInterval(refreshTimer);
+    };
+  }, [selectedId, metric, hours, bucket, onDataLoaded]);
 
   if (!selectedId) return <Empty description="Select a facility" />;
 

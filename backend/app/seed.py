@@ -1,7 +1,7 @@
 """
-Seed script — populates Supabase with realistic data.
+Seed script — populates PostgreSQL with realistic data.
 
-3 facilities, ~15 assets, 48h of sensor readings (~345k rows).
+3 facilities, 16 assets, 48h of sensor readings (~368k rows).
 Uses asyncpg with COPY protocol for bulk insert performance.
 
 Usage:
@@ -71,6 +71,89 @@ METRICS = [
     ("production_output", "units/hr"),
 ]
 
+# Operational range defaults by asset type
+# Each asset type has different acceptable ranges
+ASSET_TYPE_RANGES = {
+    "turbine": {
+        "temperature": (60, 115),
+        "pressure": (1, 10),
+        "power_consumption": (100, 500),
+        "production_output": (50, 200),
+    },
+    "boiler": {
+        "temperature": (65, 125),
+        "pressure": (2, 10),
+        "power_consumption": (150, 500),
+        "production_output": (50, 200),
+    },
+    "generator": {
+        "temperature": (60, 110),
+        "pressure": (1, 9),
+        "power_consumption": (100, 500),
+        "production_output": (60, 200),
+    },
+    "cooling_tower": {
+        "temperature": (50, 100),
+        "pressure": (1, 8),
+        "power_consumption": (100, 400),
+        "production_output": (50, 180),
+    },
+    "reactor": {
+        "temperature": (70, 130),
+        "pressure": (2, 10),
+        "power_consumption": (150, 500),
+        "production_output": (50, 200),
+    },
+    "compressor": {
+        "temperature": (60, 115),
+        "pressure": (3, 10),
+        "power_consumption": (150, 500),
+        "production_output": (50, 200),
+    },
+    "distillation_column": {
+        "temperature": (65, 120),
+        "pressure": (1, 9),
+        "power_consumption": (120, 480),
+        "production_output": (50, 200),
+    },
+    "heat_exchanger": {
+        "temperature": (60, 115),
+        "pressure": (1, 9),
+        "power_consumption": (100, 450),
+        "production_output": (50, 200),
+    },
+    "pump": {
+        "temperature": (55, 105),
+        "pressure": (2, 10),
+        "power_consumption": (100, 400),
+        "production_output": (50, 180),
+    },
+    "cnc_machine": {
+        "temperature": (60, 110),
+        "pressure": (1, 8),
+        "power_consumption": (120, 480),
+        "production_output": (60, 200),
+    },
+    "robot": {
+        "temperature": (55, 105),
+        "pressure": (1, 7),
+        "power_consumption": (100, 450),
+        "production_output": (50, 190),
+    },
+    "conveyor": {
+        "temperature": (50, 100),
+        "pressure": (1, 6),
+        "power_consumption": (80, 350),
+        "production_output": (50, 180),
+    },
+    "furnace": {
+        "temperature": (70, 130),
+        "pressure": (1, 9),
+        "power_consumption": (200, 500),
+        "production_output": (50, 200),
+    },
+}
+
 # Data generation settings
 HOURS_OF_DATA = 48
 INTERVAL_SECONDS = 30
@@ -132,6 +215,8 @@ async def seed():
         # Clear existing data (reverse FK order)
         print("Clearing existing data...")
         await conn.execute("DELETE FROM sensor_readings")
+        await conn.execute("DELETE FROM operational_insights")
+        await conn.execute("DELETE FROM asset_operational_ranges")
         await conn.execute("DELETE FROM assets")
         await conn.execute("DELETE FROM facilities")
 
@@ -144,20 +229,32 @@ async def seed():
             )
             print(f"  [OK] {fac['name']}")
 
-        # ── Insert assets ──
+        # ── Insert assets (initially all operational) ──
         print("\nInserting assets...")
-        all_assets = []  # (asset_id, asset_name, facility_name)
+        all_assets = []  # (asset_id, asset_name, asset_type, facility_name)
         for fac in FACILITIES:
             for asset_def in fac["assets"]:
                 asset_id = uuid.uuid4()
-                # Random: ~1 in 8 assets in maintenance
-                status = "maintenance" if random.random() < 0.12 else "operational"
+                # All start as operational - will update based on ranges later
                 await conn.execute(
                     "INSERT INTO assets (id, facility_id, name, type, status) VALUES ($1, $2, $3, $4, $5)",
-                    asset_id, fac["id"], asset_def["name"], asset_def["type"], status,
+                    asset_id, fac["id"], asset_def["name"], asset_def["type"], "operational",
                 )
-                all_assets.append((asset_id, asset_def["name"], fac["name"]))
-                print(f"  [OK] {asset_def['name']} ({fac['name']}) - {status}")
+                all_assets.append((asset_id, asset_def["name"], asset_def["type"], fac["name"]))
+                print(f"  [OK] {asset_def['name']} ({fac['name']}) - {asset_def['type']}")
+
+        # ── Insert operational ranges per asset ──
+        print("\nInserting operational ranges...")
+        for asset_id, asset_name, asset_type, fac_name in all_assets:
+            ranges = ASSET_TYPE_RANGES.get(asset_type, ASSET_TYPE_RANGES["turbine"])
+            for metric_name, unit in METRICS:
+                min_val, max_val = ranges[metric_name]
+                await conn.execute(
+                    "INSERT INTO asset_operational_ranges (asset_id, metric_name, min_value, max_value, unit) "
+                    "VALUES ($1, $2, $3, $4, $5)",
+                    asset_id, metric_name, min_val, max_val, unit,
+                )
+            print(f"  [OK] {asset_name} ({fac_name}) - 4 ranges configured")
 
         # ── Generate sensor readings ──
         now = datetime.now(timezone.utc)
@@ -171,7 +268,7 @@ async def seed():
 
         inserted = 0
 
-        for asset_idx, (asset_id, asset_name, fac_name) in enumerate(all_assets):
+        for asset_idx, (asset_id, asset_name, asset_type, fac_name) in enumerate(all_assets):
             seed_val = random.uniform(0, 2 * math.pi)  # Unique seed per asset
 
             # Generate all records for this asset in memory
@@ -204,6 +301,102 @@ async def seed():
             inserted += len(records)
             pct = inserted / total_readings * 100
             print(f"  [OK] {asset_name} ({fac_name}) - {len(records):,} readings  [{pct:.0f}%]")
+
+        # ── Evaluate asset status based on latest readings vs ranges ──
+        print("\nEvaluating asset status against operational ranges...")
+        assets_in_maintenance = []
+        
+        for asset_id, asset_name, asset_type, fac_name in all_assets:
+            # Get latest value for each metric
+            latest_values = {}
+            for metric_name, unit in METRICS:
+                row = await conn.fetchrow(
+                    "SELECT value FROM sensor_readings "
+                    "WHERE asset_id = $1 AND metric_name = $2 "
+                    "ORDER BY timestamp DESC LIMIT 1",
+                    asset_id, metric_name
+                )
+                if row:
+                    latest_values[metric_name] = row['value']
+            
+            # Get operational ranges for this asset
+            ranges = {}
+            range_rows = await conn.fetch(
+                "SELECT metric_name, min_value, max_value FROM asset_operational_ranges WHERE asset_id = $1",
+                asset_id
+            )
+            for r in range_rows:
+                ranges[r['metric_name']] = (r['min_value'], r['max_value'])
+            
+            # Check if any metric is out of range
+            is_out_of_range = False
+            for metric_name, value in latest_values.items():
+                if metric_name in ranges:
+                    min_val, max_val = ranges[metric_name]
+                    if value < min_val or value > max_val:
+                        is_out_of_range = True
+                        break
+            
+            if is_out_of_range:
+                assets_in_maintenance.append((asset_id, asset_name, fac_name, latest_values, ranges))
+        
+        # Enforce ~12% maintenance ratio
+        total_assets = len(all_assets)
+        target_maintenance = int(total_assets * 0.12)
+        current_maintenance = len(assets_in_maintenance)
+        
+        print(f"  Initial evaluation: {current_maintenance}/{total_assets} assets out of range")
+        print(f"  Target maintenance: {target_maintenance} assets (~12%)")
+        
+        # If too many in maintenance, randomly normalize some
+        if current_maintenance > target_maintenance:
+            excess = current_maintenance - target_maintenance
+            print(f"  Normalizing {excess} assets to stay within acceptable ranges...")
+            
+            # Randomly select assets to normalize
+            to_normalize = random.sample(assets_in_maintenance, excess)
+            
+            for asset_id, asset_name, fac_name, latest_values, ranges in to_normalize:
+                # Adjust out-of-range readings to be within acceptable limits
+                for metric_name, value in latest_values.items():
+                    if metric_name in ranges:
+                        min_val, max_val = ranges[metric_name]
+                        if value < min_val or value > max_val:
+                            # Normalize to midpoint of range with small variation
+                            normalized_value = (min_val + max_val) / 2 + random.uniform(-5, 5)
+                            normalized_value = max(min_val, min(max_val, normalized_value))
+                            
+                            # Update the latest reading
+                            await conn.execute(
+                                "UPDATE sensor_readings SET value = $1 "
+                                "WHERE asset_id = $2 AND metric_name = $3 "
+                                "AND timestamp = (SELECT MAX(timestamp) FROM sensor_readings WHERE asset_id = $2 AND metric_name = $3)",
+                                normalized_value, asset_id, metric_name
+                            )
+                print(f"  [NORMALIZED] {asset_name} ({fac_name})")
+            
+            # Remove normalized assets from maintenance list
+            assets_in_maintenance = [a for a in assets_in_maintenance if a not in to_normalize]
+        
+        # Update asset status based on final evaluation
+        operational_count = 0
+        maintenance_count = 0
+        
+        for asset_id, asset_name, asset_type, fac_name in all_assets:
+            if any(a[0] == asset_id for a in assets_in_maintenance):
+                await conn.execute(
+                    "UPDATE assets SET status = 'maintenance', updated_at = now() WHERE id = $1",
+                    asset_id
+                )
+                maintenance_count += 1
+                print(f"  [MAINTENANCE] {asset_name} ({fac_name})")
+            else:
+                # Keep as operational (already set)
+                operational_count += 1
+        
+        print(f"\nFinal status distribution:")
+        print(f"  Operational: {operational_count}/{total_assets} ({operational_count/total_assets*100:.1f}%)")
+        print(f"  Maintenance: {maintenance_count}/{total_assets} ({maintenance_count/total_assets*100:.1f}%)")
 
         print(f"\n{'='*50}")
         print(f"Seed complete!")
