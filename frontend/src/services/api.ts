@@ -10,13 +10,13 @@ import type {
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: 30_000, // 30 s — generous for Render cold-start
+  timeout: 15_000,
 });
 
-/* ---------- Retry interceptor (handles Render free-tier cold start) ---------- */
+/* ---------- Retry interceptor ---------- */
 
-const MAX_RETRIES = 5;
-const RETRY_DELAY_MS = 3_000; // initial delay, doubles each retry
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1_000; // initial delay, doubles each retry
 
 interface RetryConfig extends InternalAxiosRequestConfig {
   __retryCount?: number;

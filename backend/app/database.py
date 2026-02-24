@@ -13,8 +13,8 @@ async def get_pool() -> asyncpg.Pool:
         settings = get_settings()
         _pool = await asyncpg.create_pool(
             settings.DATABASE_URL,
-            min_size=1,
-            max_size=5,
+            min_size=2,
+            max_size=10,
         )
     return _pool
 

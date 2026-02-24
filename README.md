@@ -65,19 +65,28 @@ Real-time industrial monitoring dashboard that tracks equipment health across mu
 
 ## Architecture
 
-```
-┌──────────────┐  every 30s    ┌─────────────────────────┐
-│  Background  │───────────────▶│   PostgreSQL 16         │
-│  Task        │  COPY protocol │   (Docker, port 5433)   │
-│  (FastAPI)   │  64 readings   └───────────┬─────────────┘
-└──────┬───────┘                            │
-       │ broadcast                          │ asyncpg pool
-       ▼                                    │ (min=1, max=5)
-┌──────────────┐    /api/v1     ┌───────────▼─────────────┐
-│  React SPA   │◀──────────────▶│     FastAPI Backend     │
-│  :5173       │  JSON + SSE    │     :8001               │
-│  (Vite proxy)│                │  REST + /stream (SSE)   │
-└──────────────┘                └─────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Docker
+        DB[(PostgreSQL 16<br/>port 5433)]
+    end
+
+    subgraph FastAPI ["FastAPI Backend :8001"]
+        API["REST API<br/>/api/v1"]
+        SSE["SSE Stream<br/>/stream"]
+        BG["Background Task<br/>every 30s"]
+    end
+
+    subgraph Frontend ["React SPA :5173"]
+        UI["Dashboard UI<br/>Ant Design + Recharts"]
+    end
+
+    BG -- "COPY protocol<br/>64 readings" --> DB
+    BG -. "broadcast<br/>update" .-> SSE
+    DB -- "asyncpg pool<br/>(min=2, max=10)" --> API
+    DB -- "asyncpg pool" --> SSE
+    UI -- "JSON requests" --> API
+    SSE -- "Server-Sent Events" --> UI
 ```
 
 - The **Vite dev server** proxies `/api` requests to `localhost:8001`, so no CORS issues in development.
@@ -85,6 +94,56 @@ Real-time industrial monitoring dashboard that tracks equipment health across mu
 - The **background task** runs inside FastAPI's lifespan — no separate process or cron needed.
 - **SSE streaming** pushes dashboard updates to connected clients immediately after new readings are inserted.
 - **Operational insights** are computed automatically after each batch of readings, checking values against per-asset operational ranges.
+
+### Backend Internal Architecture
+
+```mermaid
+flowchart TB
+    subgraph Lifespan ["main.py — Lifespan"]
+        START([App Startup]) --> POOL["Create asyncpg Pool<br/>(database.py)"]
+        POOL --> BG["Launch Background Task"]
+        STOP([App Shutdown]) --> CANCEL["Cancel Task + Close Pool"]
+    end
+
+    subgraph BackgroundLoop ["Background Task — every 30s"]
+        direction TB
+        FETCH_ASSETS["Fetch all asset IDs<br/>+ facility IDs"] --> GENERATE["Generate 64 readings<br/>(16 assets × 4 metrics)"]
+        GENERATE --> COPY["COPY to sensor_readings<br/>(bulk insert)"]
+        COPY --> RELEASE["Release connection"]
+        RELEASE --> INSIGHTS["manage_insights()<br/>per facility"]
+        INSIGHTS --> BROADCAST["broadcaster.broadcast_update()<br/>per facility"]
+        BROADCAST --> SLEEP["asyncio.sleep(30)"]
+        SLEEP --> FETCH_ASSETS
+    end
+
+    subgraph Routes ["api/dashboard.py — Route Handlers"]
+        R1["GET /facilities"]
+        R2["GET /summary/&lbrace;id&rbrace;"]
+        R3["GET /timeseries/&lbrace;id&rbrace;"]
+        R4["GET /stream/&lbrace;id&rbrace; (SSE)"]
+    end
+
+    subgraph Services ["services/dashboard.py — Query Layer"]
+        S1["fetch_facilities_with_counts()"]
+        S2["fetch_facility() + fetch_kpis()<br/>+ fetch_assets_for_facility()<br/>+ fetch_insights()"]
+        S3["fetch_timeseries()"]
+        S4["manage_insights()<br/>threshold checks + upsert"]
+    end
+
+    subgraph Events ["events.py — SSE Broadcaster"]
+        COND["asyncio.Condition<br/>per facility_id"]
+    end
+
+    R1 --> S1
+    R2 --> S2
+    R3 --> S3
+    R4 -- "wait_for_update()" --> COND
+    COND -- "notify_all()" --> R4
+    BROADCAST --> COND
+    INSIGHTS --> S4
+
+    S1 & S2 & S3 & S4 --> POOL
+```
 
 ---
 
@@ -324,36 +383,65 @@ Simple health check — returns `{"status": "ok"}`.
 
 Five tables with proper indexing for time-series query performance:
 
-```
-┌──────────────┐       ┌──────────────────┐       ┌──────────────────────┐
-│  facilities  │ 1───* │     assets       │ 1───* │  sensor_readings     │
-├──────────────┤       ├──────────────────┤       ├──────────────────────┤
-│ id (PK, UUID)│       │ id (PK, UUID)    │       │ id (PK, UUID)        │
-│ name         │       │ facility_id (FK) │       │ asset_id (FK)        │
-│ location     │       │ name             │       │ metric_name          │
-│ type         │       │ type             │       │ value (FLOAT)        │
-│ created_at   │       │ status           │       │ unit                 │
-│ updated_at   │       │ created_at       │       │ timestamp (TIMESTAMPTZ) │
-└──────────────┘       │ updated_at       │       │ created_at           │
-                       └────────┬─────────┘       └──────────────────────┘
-                                │
-                    ┌───────────┴───────────┐
-                    │                       │
-        ┌───────────▼────────────┐  ┌───────▼──────────────────┐
-        │ operational_insights   │  │ asset_operational_ranges  │
-        ├────────────────────────┤  ├──────────────────────────┤
-        │ id (PK, UUID)          │  │ id (PK, UUID)            │
-        │ facility_id (FK)       │  │ asset_id (FK)            │
-        │ asset_id (FK, nullable)│  │ metric_name              │
-        │ severity               │  │ min_value                │
-        │ title                  │  │ max_value                │
-        │ description            │  │ unit                     │
-        │ metric_name            │  │ UNIQUE(asset_id, metric) │
-        │ threshold_type         │  └──────────────────────────┘
-        │ detected_at            │
-        │ resolved_at            │
-        │ is_active              │
-        └────────────────────────┘
+```mermaid
+erDiagram
+    facilities ||--o{ assets : "has"
+    assets ||--o{ sensor_readings : "produces"
+    assets ||--o{ operational_insights : "triggers"
+    assets ||--o{ asset_operational_ranges : "has"
+    facilities ||--o{ operational_insights : "belongs to"
+
+    facilities {
+        uuid id PK
+        varchar name
+        varchar location
+        varchar type
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    assets {
+        uuid id PK
+        uuid facility_id FK
+        varchar name
+        varchar type
+        varchar status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    sensor_readings {
+        uuid id PK
+        uuid asset_id FK
+        varchar metric_name
+        float value
+        varchar unit
+        timestamptz timestamp
+        timestamptz created_at
+    }
+
+    operational_insights {
+        uuid id PK
+        uuid facility_id FK
+        uuid asset_id FK "nullable"
+        varchar severity
+        varchar title
+        text description
+        varchar metric_name
+        varchar threshold_type
+        timestamptz detected_at
+        timestamptz resolved_at
+        boolean is_active
+    }
+
+    asset_operational_ranges {
+        uuid id PK
+        uuid asset_id FK
+        varchar metric_name
+        float min_value
+        float max_value
+        varchar unit
+    }
 ```
 
 **Key indexes:**

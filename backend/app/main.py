@@ -36,10 +36,12 @@ async def _generate_live_readings():
     while True:
         try:
             pool = await get_pool()
+
+            # ── Phase 1: insert readings (hold connection only for COPY) ──
             async with pool.acquire() as conn:
-                # Fetch all asset IDs
-                rows = await conn.fetch("SELECT id FROM assets")
+                rows = await conn.fetch("SELECT id, facility_id FROM assets")
                 asset_ids = [r["id"] for r in rows]
+                facility_ids = list({r["facility_id"] for r in rows})
 
                 now = datetime.now(timezone.utc)
                 records = []
@@ -61,21 +63,14 @@ async def _generate_live_readings():
                     columns=["id", "asset_id", "metric_name", "value", "unit", "timestamp"],
                 )
                 logger.info("Live: inserted %d readings for %d assets", len(records), len(asset_ids))
-                print(f"[LIVE] Inserted {len(records)} readings for {len(asset_ids)} assets")
-                
-                # Get unique facility IDs for these assets
-                facility_rows = await conn.fetch(
-                    "SELECT DISTINCT facility_id FROM assets WHERE id = ANY($1)",
-                    asset_ids
-                )
-                
-                # Manage insights for each facility
-                from app.services.dashboard import manage_insights
-                for row in facility_rows:
-                    facility_id = row["facility_id"]
-                    await manage_insights(facility_id)
-                    await broadcaster.broadcast_update(facility_id)
-                    logger.info("Updated insights and broadcasted for facility %s", facility_id)
+            # ── connection released here ──
+
+            # ── Phase 2: insights + broadcast (no connection held) ──
+            from app.services.dashboard import manage_insights
+            for fid in facility_ids:
+                await manage_insights(fid)
+                await broadcaster.broadcast_update(fid)
+                logger.info("Updated insights and broadcasted for facility %s", fid)
 
         except asyncio.CancelledError:
             raise
