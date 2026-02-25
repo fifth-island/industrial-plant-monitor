@@ -492,6 +492,9 @@ async def fetch_kpis(facility_id: UUID, hours: int = 24) -> list[dict]:
             'avg_value': efficiency,
             'min_value': efficiency,
             'max_value': efficiency,
+            'p50_value': efficiency,
+            'p90_value': efficiency,
+            'p95_value': efficiency,
             'unit': '%'
         })
     
