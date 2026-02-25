@@ -123,6 +123,9 @@ async def get_facility_summary(
                     avg_value=float(k["avg_value"]),
                     min_value=float(k["min_value"]),
                     max_value=float(k["max_value"]),
+                    p50_value=float(k["p50_value"]),
+                    p90_value=float(k["p90_value"]),
+                    p95_value=float(k["p95_value"]),
                     unit=k["unit"],
                 )
                 for k in kpis

@@ -21,6 +21,9 @@ export interface MetricKPI {
   avg_value: number;
   min_value: number;
   max_value: number;
+  p50_value: number;
+  p90_value: number;
+  p95_value: number;
   unit: string;
 }
 

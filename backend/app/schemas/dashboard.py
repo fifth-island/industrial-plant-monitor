@@ -40,6 +40,9 @@ class MetricKPI(BaseModel):
     avg_value: float
     min_value: float
     max_value: float
+    p50_value: float = Field(description="50th percentile (median)")
+    p90_value: float = Field(description="90th percentile")
+    p95_value: float = Field(description="95th percentile")
     unit: str
 
 

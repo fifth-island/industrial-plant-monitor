@@ -455,7 +455,10 @@ async def fetch_kpis(facility_id: UUID, hours: int = 24) -> list[dict]:
                 sr.metric_name,
                 ROUND(SUM(sr.value)::numeric, 2) AS total_value,
                 ROUND(MIN(sr.value)::numeric, 2) AS min_value,
-                ROUND(MAX(sr.value)::numeric, 2) AS max_value
+                ROUND(MAX(sr.value)::numeric, 2) AS max_value,
+                ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sr.value)::numeric, 2) AS p50_value,
+                ROUND(PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY sr.value)::numeric, 2) AS p90_value,
+                ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY sr.value)::numeric, 2) AS p95_value
             FROM sensor_readings sr
             JOIN assets a ON a.id = sr.asset_id
             WHERE a.facility_id = $1

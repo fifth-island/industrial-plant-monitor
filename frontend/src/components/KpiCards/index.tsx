@@ -288,6 +288,8 @@ export default function KpiCards({ onDataLoaded }: KpiCardsProps) {
   const powerKPI = summary.kpis.find(k => k.metric_name === 'power_consumption');
   const productionKPI = summary.kpis.find(k => k.metric_name === 'production_output');
   const efficiencyKPI = summary.kpis.find(k => k.metric_name === 'efficiency');
+  const tempKPI = summary.kpis.find(k => k.metric_name === 'temperature');
+  const pressureKPI = summary.kpis.find(k => k.metric_name === 'pressure');
 
   return (
     <div>
@@ -317,7 +319,7 @@ export default function KpiCards({ onDataLoaded }: KpiCardsProps) {
               valueStyle={{ color: '#faad14' }}
             />
             <div style={{ fontSize: 12, color: 'var(--cv-text-tertiary)', marginTop: 8 }}>
-              Min: {powerKPI?.min_value} | Max: {powerKPI?.max_value}
+              P50: {powerKPI?.p50_value} | P90: {powerKPI?.p90_value} | P95: {powerKPI?.p95_value}
             </div>
           </Card>
         </Col>
@@ -333,7 +335,7 @@ export default function KpiCards({ onDataLoaded }: KpiCardsProps) {
               valueStyle={{ color: '#52c41a' }}
             />
             <div style={{ fontSize: 12, color: 'var(--cv-text-tertiary)', marginTop: 8 }}>
-              Min: {productionKPI?.min_value} | Max: {productionKPI?.max_value}
+              P50: {productionKPI?.p50_value} | P90: {productionKPI?.p90_value} | P95: {productionKPI?.p95_value}
             </div>
           </Card>
         </Col>
