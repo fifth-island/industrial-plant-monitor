@@ -22,7 +22,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 
 import { useFacility } from '../../context/FacilityContext';
-import { fetchSummary, streamSummary } from '../../services/api';
+import { fetchSummary } from '../../services/api';
 import OperationalInsights from '../OperationalInsights';
 import type {
   AssetStatus,
@@ -175,17 +175,12 @@ export default function KpiCards({ onDataLoaded }: KpiCardsProps) {
   const [summary, setSummary] = useState<FacilitySummaryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [hours, setHours] = useState<number>(24);
-  const [usePolling, setUsePolling] = useState(false);
-  const [sseErrorCount, setSseErrorCount] = useState(0);
 
   useEffect(() => {
     if (!selectedId) return;
     let cancelled = false;
-    let retryTimer: ReturnType<typeof setTimeout>;
-    let eventSource: EventSource | null = null;
-    let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-    async function initialLoad() {
+    async function load() {
       if (cancelled) return;
       setLoading(true);
       try {
@@ -196,65 +191,17 @@ export default function KpiCards({ onDataLoaded }: KpiCardsProps) {
         }
       } catch (err) {
         console.error(err);
-        retryTimer = setTimeout(initialLoad, 4_000);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    // Initial load for fast first render
-    initialLoad();
-
-    // Choose between SSE or polling based on fallback state
-    if (!usePolling && sseErrorCount < 3) {
-      // Use SSE streaming
-      eventSource = streamSummary(
-        selectedId!,
-        hours,
-        (data) => {
-          if (!cancelled) {
-            setSummary(data);
-            onDataLoaded?.();
-            setSseErrorCount(0); // Reset error count on success
-          }
-        },
-        () => {
-          // SSE error handler
-          setSseErrorCount((prev) => {
-            const newCount = prev + 1;
-            console.warn(`[SSE] Error count: ${newCount}/3`);
-            if (newCount >= 3) {
-              console.warn('[SSE] Max errors reached, falling back to polling');
-              setUsePolling(true);
-            }
-            return newCount;
-          });
-        }
-      );
-    } else {
-      // Fallback to polling
-      console.info('[Polling] Using 30-second interval polling');
-      refreshTimer = setInterval(async () => {
-        if (cancelled) return;
-        try {
-          const res = await fetchSummary(selectedId!, hours);
-          if (!cancelled) {
-            setSummary(res);
-            onDataLoaded?.();
-          }
-        } catch (err) {
-          console.error('[Polling] Error:', err);
-        }
-      }, 30_000);
-    }
+    load();
 
     return () => {
       cancelled = true;
-      clearTimeout(retryTimer);
-      if (eventSource) eventSource.close();
-      if (refreshTimer) clearInterval(refreshTimer);
     };
-  }, [selectedId, hours, onDataLoaded, usePolling, sseErrorCount]);
+  }, [selectedId, hours, onDataLoaded]);
 
   if (!selectedId) return <Empty description="Select a facility" />;
 

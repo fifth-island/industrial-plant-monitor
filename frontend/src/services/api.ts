@@ -1,4 +1,12 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+/**
+ * API service — hardcoded data layer for Vercel deployment.
+ *
+ * All functions return mock data from local TypeScript modules
+ * instead of calling a remote backend.  The response shapes are
+ * identical to the original FastAPI responses so components
+ * remain unchanged.
+ */
+
 import type {
   FacilitiesListResponse,
   FacilitySummaryResponse,
@@ -6,66 +14,23 @@ import type {
   TimeseriesResponse,
 } from '../types';
 
-/* ---------- Axios instance ---------- */
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: 15_000,
-});
-
-/* ---------- Retry interceptor ---------- */
-
-const MAX_RETRIES = 2;
-const RETRY_DELAY_MS = 1_000; // initial delay, doubles each retry
-
-interface RetryConfig extends InternalAxiosRequestConfig {
-  __retryCount?: number;
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function shouldRetry(error: AxiosError): boolean {
-  // Retry on network errors (ECONNABORTED, timeout, no response)
-  if (!error.response) return true;
-  // Retry on 500 / 502 / 503 / 504 (typical cold-start codes)
-  const status = error.response.status;
-  return status >= 500 && status <= 504;
-}
-
-api.interceptors.response.use(undefined, async (error: AxiosError) => {
-  const config = error.config as RetryConfig | undefined;
-  if (!config || !shouldRetry(error)) return Promise.reject(error);
-
-  config.__retryCount = config.__retryCount ?? 0;
-  if (config.__retryCount >= MAX_RETRIES) return Promise.reject(error);
-
-  config.__retryCount += 1;
-  const delay = RETRY_DELAY_MS * Math.pow(2, config.__retryCount - 1);
-  console.warn(
-    `[api] Retry ${config.__retryCount}/${MAX_RETRIES} in ${delay}ms → ${config.url}`,
-  );
-  await sleep(delay);
-  return api.request(config);
-});
+import { facilitiesListResponse } from '../data/facilities';
+import { summaries } from '../data/summaries';
+import { generateTimeseries } from '../data/timeseries';
 
 /** List all facilities. */
 export async function fetchFacilities(): Promise<FacilitiesListResponse> {
-  const { data } = await api.get<FacilitiesListResponse>('/facilities');
-  return data;
+  return facilitiesListResponse;
 }
 
 /** Summary / KPIs for a facility. */
 export async function fetchSummary(
   facilityId: string,
-  hours: number = 24,
+  _hours: number = 24,
 ): Promise<FacilitySummaryResponse> {
-  const { data } = await api.get<FacilitySummaryResponse>(
-    `/dashboard/summary/${facilityId}`,
-    { params: { hours } },
-  );
-  return data;
+  const summary = summaries[facilityId];
+  if (!summary) throw new Error(`Facility ${facilityId} not found`);
+  return summary;
 }
 
 /** Timeseries data for charts. */
@@ -75,41 +40,6 @@ export async function fetchTimeseries(
   hours: number = 24,
   bucketMinutes: number = 5,
 ): Promise<TimeseriesResponse> {
-  const { data } = await api.get<TimeseriesResponse>(
-    `/dashboard/timeseries/${facilityId}`,
-    { params: { metric, hours, bucket_minutes: bucketMinutes } },
-  );
-  return data;
-}
-
-/** Stream live summary updates using Server-Sent Events. */
-export function streamSummary(
-  facilityId: string,
-  hours: number = 24,
-  onData: (summary: FacilitySummaryResponse) => void,
-  onError?: (error: Event) => void,
-): EventSource {
-  const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-  const url = `${baseURL}/dashboard/stream/${facilityId}?hours=${hours}`;
-  
-  const eventSource = new EventSource(url);
-  
-  eventSource.addEventListener('summary', (event: MessageEvent) => {
-    try {
-      const summary = JSON.parse(event.data) as FacilitySummaryResponse;
-      onData(summary);
-    } catch (err) {
-      console.error('[SSE] Failed to parse summary data:', err);
-    }
-  });
-  
-  eventSource.addEventListener('error', (event: Event) => {
-    console.error('[SSE] Connection error:', event);
-    if (onError) {
-      onError(event);
-    }
-  });
-  
-  return eventSource;
+  return generateTimeseries(facilityId, metric, hours, bucketMinutes);
 }
 

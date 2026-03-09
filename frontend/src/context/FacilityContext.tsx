@@ -36,9 +36,7 @@ export const FacilityProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       } catch (err) {
         console.error(err);
-        if (!cancelled) setError('Failed to load facilities. The server may be waking up — retrying…');
-        // Auto-retry after 5 s (Render cold-start can take 30s+)
-        setTimeout(() => { if (!cancelled) load(); }, 5_000);
+        if (!cancelled) setError('Failed to load facilities');
       } finally {
         if (!cancelled) setLoading(false);
       }

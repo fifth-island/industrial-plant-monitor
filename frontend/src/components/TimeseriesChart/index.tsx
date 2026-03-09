@@ -70,7 +70,6 @@ export default function TimeseriesChart({ onDataLoaded }: TimeseriesChartProps) 
     if (!selectedId) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout>;
-    let refreshTimer: ReturnType<typeof setInterval>;
 
     async function load() {
       if (cancelled) return;
@@ -90,15 +89,10 @@ export default function TimeseriesChart({ onDataLoaded }: TimeseriesChartProps) 
     }
 
     load();
-    // Auto-refresh every 30 seconds
-    refreshTimer = setInterval(() => {
-      if (!cancelled) load();
-    }, 30_000);
 
     return () => {
       cancelled = true;
       clearTimeout(retryTimer);
-      clearInterval(refreshTimer);
     };
   }, [selectedId, metric, hours, bucket, onDataLoaded]);
 
