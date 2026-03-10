@@ -17,7 +17,7 @@ export default function FacilitySelector() {
       <EnvironmentOutlined style={{ fontSize: 16, color: '#ffbc39', flexShrink: 0 }} />
       <Select
         className="header-facility-select"
-        classNames={{ popup: 'header-facility-dropdown' }}
+        popupClassName="header-facility-dropdown"
         value={selectedId ?? undefined}
         onChange={setSelectedId}
         loading={loading}

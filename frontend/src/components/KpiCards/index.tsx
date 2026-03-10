@@ -46,7 +46,7 @@ function formatLargeNumber(value: number): string {
 /** Return a CVector-palette color based on value relative to range. */
 function getMetricColor(value: number | null | undefined, range: { min: number; max: number } | undefined): string {
   if (value === null || value === undefined || !range) return 'var(--cv-text-secondary)';
-  const { min, max } = range;
+  const { max } = range;
   const dangerThreshold = max * 0.9; // 90% of max = danger
   const warnThreshold = max * 0.75;  // 75% of max = warning
   
@@ -235,8 +235,6 @@ export default function KpiCards({ onDataLoaded }: KpiCardsProps) {
   const powerKPI = summary.kpis.find(k => k.metric_name === 'power_consumption');
   const productionKPI = summary.kpis.find(k => k.metric_name === 'production_output');
   const efficiencyKPI = summary.kpis.find(k => k.metric_name === 'efficiency');
-  const tempKPI = summary.kpis.find(k => k.metric_name === 'temperature');
-  const pressureKPI = summary.kpis.find(k => k.metric_name === 'pressure');
 
   return (
     <div>
